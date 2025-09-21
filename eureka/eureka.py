@@ -130,7 +130,8 @@ def main(cfg):
                 r'"""(.*?)"""',
                 r'""(.*?)""',
                 r'"(.*?)"',
-            ]
+            ] # Uses the first pattern that matches, or falls back to the entire response if no pattern matches
+
             for pattern in patterns:
                 code_string = re.search(pattern, response_cur, re.DOTALL)
                 if code_string is not None:
@@ -139,12 +140,17 @@ def main(cfg):
             code_string = response_cur if not code_string else code_string
 
             # Remove unnecessary imports
+            # Removes everything before the first function definition
+            # This eliminates unnecessary imports that the LLM might have included
             lines = code_string.split("\n")
             for i, line in enumerate(lines):
                 if line.strip().startswith("def "):
                     code_string = "\n".join(lines[i:])
-                    
+                    break
+
             # Add the Eureka Reward Signature to the environment code
+            # Extracts the function signature from the generated code
+            # If parsing fails, skips this code sample and moves to the next one
             try:
                 gpt_reward_signature, input_lst = get_function_signature(code_string)
             except Exception as e:
@@ -166,13 +172,15 @@ def main(cfg):
             else:
                 raise NotImplementedError
 
-            # Save the new environment code when the output contains valid code string!
+            # Save the new code when the output contains valid code string in a .py file!
             with open(output_file, 'w') as file:
                 file.writelines(task_code_string_iter + '\n')
+                # make sure necessary imports are included
                 file.writelines("from typing import Tuple, Dict" + '\n')
                 file.writelines("import math" + '\n')
                 file.writelines("import torch" + '\n')
                 file.writelines("from torch import Tensor" + '\n')
+                # Make sure the GPT-generated reward function has JIT compilation decorator
                 if "@torch.jit.script" not in code_string:
                     code_string = "@torch.jit.script\n" + code_string
                 file.writelines(code_string + '\n')
