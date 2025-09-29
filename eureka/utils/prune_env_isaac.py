@@ -4,6 +4,9 @@ import ast
 
 def modify_python_file(task, filename, output):
     # Create base environments compatible with Eureka generated rewards
+    """
+    Modify the given Python file by replacing occurrences of compute_{task}_reward with compute_success,
+    """
     with open(filename, 'r') as file:
         lines = file.readlines()
 
@@ -18,6 +21,8 @@ def modify_python_file(task, filename, output):
     for line in lines:
         stripped = line.strip()
         # Ignore comment lines
+        #Step 2: Comment and Docstring Filtering
+        #  Removes all comments except type hints (# type:)
         if stripped.startswith("#"):
             if not stripped.startswith("# type:"):
                 continue
@@ -33,12 +38,14 @@ def modify_python_file(task, filename, output):
         # Ignore lines inside docstrings
         if inside_docstring:
             continue
-        
+
+        # Finds calls to original reward functions
         if f"compute_{task}_reward" in line:
 
             if "@torch.jit.script" not in prev_line:
-                # Create compute_success function 
+                # Redirects reward assignment
                 line = line.replace("self.rew_buf[:], ", "self.gt_rew_buf, ")
+                # rename function: compute_{task}_reward to compute_success
                 line = line.replace(f"compute_{task}_reward", "compute_success")
                 in_success = True 
             else:
@@ -59,6 +66,13 @@ def modify_python_file(task, filename, output):
         file.writelines(modified_lines)
 
 def prune_python_class(filename, output, methods_to_keep, new_docstring, methods_to_prune_docstring):
+    """
+    Purpose: Creates a condensed observation-only version of the environment for LLM context
+    efficiency.
+    This creates the *_obs.py files that provide observation 
+   context to LLMs without overwhelming them with implementation details. The LLM uses this to
+   understand what observations are available for reward design.
+    """
     with open(filename, 'r') as file:
         lines = file.readlines()
 
@@ -111,6 +125,10 @@ def prune_python_class(filename, output, methods_to_keep, new_docstring, methods
         file.writelines(pruned_lines[:-1])
 
 def prune_reward(filename, output, method_to_keep):
+    """
+    Purpose: This extracts standalone reward functions that can be
+  analyzed by LLMs or used as examples for reward function generation.
+    """
     with open(filename, 'r') as file:
         lines = file.readlines()
 
